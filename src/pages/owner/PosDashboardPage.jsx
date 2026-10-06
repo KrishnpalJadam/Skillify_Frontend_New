@@ -1601,6 +1601,9 @@ export default function PosDashboardPage() {
             
             <div className="pos-modal-body">
               {/* Package Grid */}
+              <div style={{ fontWeight: 700, color: "#1e293b", fontSize: "0.95rem", marginBottom: -8 }}>
+                Available Packages (Select to Apply):
+              </div>
               <div className="pos-modal-cards-grid">
                 {(posContext.packages || []).filter(p => p.name.toLowerCase().includes(pkgSearch.toLowerCase())).map(pkg => {
                   const isSelected = pkgModalPkg?.id === pkg.id;
