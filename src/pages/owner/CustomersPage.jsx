@@ -84,6 +84,7 @@ export default function CustomersPage() {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "desc" });
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 15;
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingMessage, setSavingMessage] = useState("Saving changes...");
@@ -159,6 +160,7 @@ export default function CustomersPage() {
   const [packageError, setPackageError] = useState("");
   const [giftCardError, setGiftCardError] = useState("");
   const actionMenuRef = useRef(null);
+  const skipPageEffect = useRef(false);
   const [formData, setFormData] = useState({
     phone: "",
     alternatePhone: "",
@@ -170,14 +172,26 @@ export default function CustomersPage() {
     gender: "FEMALE"
   });
 
-  const load = async (searchText = query, selectedFilter = filterType) => {
+  const load = async (searchText = query, selectedFilter = filterType, page = currentPage) => {
     setLoading(true);
     try {
-      const params = { q: searchText, filter: selectedFilter };
+      const skip = (page - 1) * pageSize;
+      const take = pageSize;
+      const params = { q: searchText, filter: selectedFilter, skip, take };
       if (selectedBranchId) params.branchId = selectedBranchId;
       const response = await api.get("/owner/customers", { params });
-      
-      setRows(Array.isArray(response.data) ? response.data : (response.data?.data || []));
+
+      if (Array.isArray(response.data)) {
+        // Backend returned plain array — derive total from skip + returned count
+        setRows(response.data);
+        setTotalCount(skip + response.data.length);
+      } else {
+        setRows(response.data?.data || []);
+        // Prefer explicit total/count field from backend, fall back to computed
+        setTotalCount(
+          response.data?.total ?? response.data?.count ?? (skip + (response.data?.data?.length || 0))
+        );
+      }
     } catch (error) {
       console.error(error);
     } finally {
@@ -186,7 +200,8 @@ export default function CustomersPage() {
   };
 
   useEffect(() => {
-    load();
+    load(query, filterType, 1);
+    setCurrentPage(1);
   }, [filterType, selectedBranchId]);
 
   useEffect(() => {
@@ -1126,22 +1141,29 @@ export default function CustomersPage() {
     return sortConfig.direction === "asc" ? result : -result;
   });
 
-  const totalPages = Math.ceil(visibleRows.length / pageSize) || 1;
+  const totalPages = Math.ceil(totalCount / pageSize) || 1;
 
   useEffect(() => {
+    skipPageEffect.current = true;
     setCurrentPage(1);
+    load(query, filterType, 1);
   }, [query, appliedFilters, sortConfig]);
 
   useEffect(() => {
-    if (currentPage > totalPages) {
+    if (currentPage > totalPages && totalPages > 0) {
       setCurrentPage(totalPages);
     }
-  }, [visibleRows.length, currentPage, totalPages]);
+  }, [totalCount, currentPage, totalPages]);
 
-  const paginatedRows = useMemo(() => {
-    const startIndex = (currentPage - 1) * pageSize;
-    return visibleRows.slice(startIndex, startIndex + pageSize);
-  }, [visibleRows, currentPage, pageSize]);
+  useEffect(() => {
+    if (skipPageEffect.current) {
+      skipPageEffect.current = false;
+      return;
+    }
+    load(query, filterType, currentPage);
+  }, [currentPage]);
+
+  const paginatedRows = visibleRows;
 
   const renderFilterContent = () => {
     switch (activeFilterSection) {
@@ -1769,8 +1791,8 @@ export default function CustomersPage() {
                 </button>
               </div>
               <div style={{ fontSize: "0.85rem", color: "#64748b", fontWeight: 500 }}>
-                {visibleRows.length > 0 ? (
-                  `${(currentPage - 1) * pageSize + 1}-${Math.min(currentPage * pageSize, visibleRows.length)} of ${visibleRows.length}`
+                {totalCount > 0 ? (
+                  `${(currentPage - 1) * pageSize + 1}-${Math.min(currentPage * pageSize, totalCount)} of ${totalCount}`
                 ) : (
                   "0-0 of 0"
                 )}
