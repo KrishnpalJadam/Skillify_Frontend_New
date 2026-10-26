@@ -482,7 +482,17 @@ export default function ServiceCategoriesPage() {
   const labelStyle = { display: "block", marginBottom: 6, fontWeight: 700, color: "#475569", fontSize: 13 };
 
   return (
-    <div style={{ background: "#f8fafc", minHeight: "100vh", fontFamily: "'Poppins','Segoe UI',sans-serif" }}>
+    <div
+  style={{
+    background: "#f8fafc",
+    height: "100vh",
+    height: "100dvh",
+    overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
+    fontFamily: "'Poppins','Segoe UI',sans-serif"
+  }}
+>
       {/* Toast Notifications */}
       {status.error && (
         <div style={{ position: "fixed", top: 80, right: 24, background: "#fef2f2", color: "#dc2626", padding: "12px 20px", borderRadius: 10, fontSize: 14, zIndex: 99999, boxShadow: "0 4px 20px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", gap: 12, fontWeight: 600, maxWidth: 380 }}>
@@ -517,10 +527,18 @@ export default function ServiceCategoriesPage() {
       </div>
 
       {/* Three-Column Layout */}
-      <div className="responsive-service-grid" style={{ display: "grid", gridTemplateColumns: "260px 240px 1fr", height: "calc(100vh - 130px)", overflow: "hidden" }}>
-        
+     <div
+  className="responsive-service-grid"
+  style={{
+    display: "grid",
+    gridTemplateColumns: "260px 240px minmax(0, 1fr)",
+    flex: 1,
+    minHeight: 0,
+    overflow: "hidden"
+  }}
+>
         {/* Column 1 - Categories */}
-        <div className="responsive-service-col-1" style={{ background: "#fff", borderRight: "1px solid #e2e8f0", display: "flex", flexDirection: "column" }}>
+        <div className="responsive-service-col-1" style={{ background: "#fff", borderRight: "1px solid #e2e8f0", display: "flex", flexDirection: "column" , overflow: "auto"}}>
           <div style={{ padding: "16px 20px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>Categories</span>
             <span style={{ fontSize: 11, background: "#f1f5f9", color: "#64748b", padding: "3px 8px", borderRadius: 12, fontWeight: 600 }}>{filteredCategories.length}</span>

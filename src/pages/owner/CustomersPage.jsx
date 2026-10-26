@@ -176,6 +176,7 @@ export default function CustomersPage() {
       const params = { q: searchText, filter: selectedFilter };
       if (selectedBranchId) params.branchId = selectedBranchId;
       const response = await api.get("/owner/customers", { params });
+      
       setRows(Array.isArray(response.data) ? response.data : (response.data?.data || []));
     } catch (error) {
       console.error(error);
