@@ -1753,7 +1753,7 @@ export default function InventoryPage() {
                 {purchaseOrderForm.items.map((item, index) => {
                   const selectedProduct = products.find((product) => product.id === item.productId);
                   return (
-                    <div className="po-item-row" key={`${item.productId || "item"}-${index}`} style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 12, padding: 16, display: "grid", gridTemplateColumns: "2fr 1fr 1fr auto", gap: 12, alignItems: "end" }}>
+                    <div className="po-item-row" key={`${item.productId || "item"}-${index}`} style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 12, padding: 16, gridTemplateColumns: "2fr 1fr 1fr auto", gap: 12, alignItems: "end" }}>
                       <div className="sp-group">
                         <label className="sp-label">Product</label>
                         <CustomDropdown
@@ -1778,7 +1778,7 @@ export default function InventoryPage() {
                         <label className="sp-label">Unit Cost</label>
                         <input type="number" min="0" step="0.01" className="sp-input" required value={item.unitCost} onChange={e => updatePoItem(index, "unitCost", Number(e.target.value))} />
                       </div>
-                      <button type="button" onClick={() => removePoItemRow(index)} style={{ border: "none", background: "#fee2e2", color: "#b91c1c", borderRadius: 10, width: 42, height: 42, cursor: "pointer" }} title="Remove item">
+                      <button type="button" onClick={() => removePoItemRow(index)} style={{ border: "none", background: "#fee2e2", color: "#b91c1c", borderRadius: 10, width: 42, height: 42, cursor: "pointer", marginTop:"10px" }} title="Remove item">
                         <Trash2 size={16} />
                       </button>
                       <div style={{ gridColumn: "1 / -1", fontSize: "0.85rem", color: "#64748b" }}>
