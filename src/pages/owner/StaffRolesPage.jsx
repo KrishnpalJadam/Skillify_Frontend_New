@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import EmptyState from "../../components/EmptyState";
 import PageLoader from "../../components/PageLoader";
-import { MODULE_GROUPS as SHARED_MODULE_GROUPS, PERMISSION_ACTIONS } from "./staffAccessConfig";
+import { MODULE_GROUPS as SHARED_MODULE_GROUPS, PERMISSION_ACTIONS, ROLE_OPTIONS, ROLE_PRESETS, clonePermissions } from "./staffAccessConfig";
 
 /* ─── config ─────────────────────────────────────── */
 const ACTIONS = PERMISSION_ACTIONS.filter((a) => a !== "delete");
@@ -186,19 +186,92 @@ export default function StaffRolesPage() {
     return () => { active = false; };
   }, []);
 
-  const togglePermission = async (row, moduleKey, action) => {
+  const handleUserRoleChange = async (row, roleValue) => {
     setSavingId(row.id);
     try {
-      const current   = row.permissions || {};
-      const curActs   = Array.isArray(current[moduleKey]) ? current[moduleKey] : [];
-      const nextActs  = curActs.includes(action)
-        ? curActs.filter((a) => a !== action)
-        : [...curActs, action];
-      const nextPerms = { ...current, [moduleKey]: nextActs };
-      await api.patch(`/owner/users/${row.id}`, { permissions: nextPerms });
+      let patchData = {};
+      if (roleValue.startsWith("custom:")) {
+        const customRoleId = roleValue.replace("custom:", "");
+        const cRole = customRoles.find((r) => r.id === customRoleId);
+        patchData = {
+          customRoleId,
+          salonRole: "STAFF",
+          roleTitle: cRole?.name || row.roleTitle,
+          permissions: clonePermissions(cRole?.permissions || {})
+        };
+      } else if (roleValue.startsWith("system:")) {
+        const sysRole = roleValue.replace("system:", "");
+        patchData = {
+          customRoleId: null,
+          salonRole: sysRole,
+          permissions: clonePermissions(ROLE_PRESETS[sysRole] || {})
+        };
+      }
+      setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, ...patchData } : r)));
+      await api.patch(`/owner/users/${row.id}`, patchData);
       await load();
     } catch (err) {
+      alert("Failed to update user role.");
+      await load();
+    } finally {
+      setSavingId("");
+    }
+  };
+
+  const grantFullAccessToUser = async (row) => {
+    setSavingId(row.id);
+    try {
+      const fullPerms = {};
+      MODULE_GROUPS.forEach((g) => {
+        g.modules.forEach((mod) => {
+          fullPerms[mod] = [...ACTIONS];
+        });
+      });
+      setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, permissions: fullPerms } : r)));
+      await api.patch(`/owner/users/${row.id}`, { permissions: fullPerms });
+      await load();
+    } catch (err) {
+      alert("Failed to grant full access.");
+      await load();
+    } finally {
+      setSavingId("");
+    }
+  };
+
+  const revokeAllAccessFromUser = async (row) => {
+    setSavingId(row.id);
+    try {
+      const emptyPerms = {};
+      MODULE_GROUPS.forEach((g) => {
+        g.modules.forEach((mod) => {
+          emptyPerms[mod] = [];
+        });
+      });
+      setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, permissions: emptyPerms } : r)));
+      await api.patch(`/owner/users/${row.id}`, { permissions: emptyPerms });
+      await load();
+    } catch (err) {
+      alert("Failed to revoke permissions.");
+      await load();
+    } finally {
+      setSavingId("");
+    }
+  };
+
+  const togglePermission = async (row, moduleKey, action) => {
+    setSavingId(row.id);
+    const current   = row.permissions || {};
+    const curActs   = Array.isArray(current[moduleKey]) ? current[moduleKey] : [];
+    const nextActs  = curActs.includes(action)
+      ? curActs.filter((a) => a !== action)
+      : [...curActs, action];
+    const nextPerms = { ...current, [moduleKey]: nextActs };
+    setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, permissions: nextPerms } : r)));
+    try {
+      await api.patch(`/owner/users/${row.id}`, { permissions: nextPerms });
+    } catch (err) {
       alert("Failed to update permission.");
+      await load();
     } finally {
       setSavingId("");
     }
@@ -206,13 +279,14 @@ export default function StaffRolesPage() {
 
   const toggleAll = async (row, moduleKey, forceAll) => {
     setSavingId(row.id);
+    const current  = row.permissions || {};
+    const nextPerms = { ...current, [moduleKey]: forceAll ? [...ACTIONS] : [] };
+    setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, permissions: nextPerms } : r)));
     try {
-      const current  = row.permissions || {};
-      const nextPerms = { ...current, [moduleKey]: forceAll ? [...ACTIONS] : [] };
       await api.patch(`/owner/users/${row.id}`, { permissions: nextPerms });
-      await load();
     } catch (err) {
       alert("Failed to update permissions.");
+      await load();
     } finally {
       setSavingId("");
     }
@@ -482,18 +556,30 @@ export default function StaffRolesPage() {
                   </div>
 
                   {accessControl.approvalRequiredForRoleEdits ? (
-                    <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, color: "#334155", fontSize: 13, fontWeight: 600 }}>
-                      <input
-                        type="checkbox"
-                        checked={roleApprovalChecked}
-                        onChange={(event) => setRoleApprovalChecked(event.target.checked)}
-                      />
-                      I reviewed and approve this role permission change.
-                    </label>
+                    <div style={{
+                      padding: "12px 16px",
+                      borderRadius: 8,
+                      border: roleFormError && !roleApprovalChecked ? "2px solid #ef4444" : "1.5px solid #cbd5e1",
+                      background: roleFormError && !roleApprovalChecked ? "#fef2f2" : "#f8fafc",
+                      marginBottom: 16
+                    }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 10, color: "#1e293b", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={roleApprovalChecked}
+                          onChange={(event) => {
+                            setRoleApprovalChecked(event.target.checked);
+                            if (event.target.checked) setRoleFormError("");
+                          }}
+                          style={{ width: 16, height: 16, cursor: "pointer" }}
+                        />
+                        <span>I reviewed and approve this role permission change.</span>
+                      </label>
+                    </div>
                   ) : null}
                   {roleFormError ? (
-                    <div style={{ marginBottom: 16, color: "#dc2626", fontSize: 13, fontWeight: 600 }}>
-                      {roleFormError}
+                    <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: 8, background: "#fef2f2", color: "#dc2626", fontSize: 13, fontWeight: 600, border: "1px solid #fecaca" }}>
+                      ⚠️ {roleFormError}
                     </div>
                   ) : null}
 
@@ -550,6 +636,42 @@ export default function StaffRolesPage() {
                         </div>
 
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }} onClick={(e) => e.stopPropagation()}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>Role:</span>
+                            <select
+                              value={row.customRoleId ? `custom:${row.customRoleId}` : `system:${row.salonRole}`}
+                              onChange={(e) => handleUserRoleChange(row, e.target.value)}
+                              disabled={isSaving}
+                              style={{
+                                padding: "5px 10px",
+                                borderRadius: 8,
+                                border: "1.5px solid #cbd5e1",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                background: "#ffffff",
+                                color: "#0f172a",
+                                cursor: isSaving ? "not-allowed" : "pointer",
+                                outline: "none"
+                              }}
+                            >
+                              <optgroup label="System Roles">
+                                {ROLE_OPTIONS.map((opt) => (
+                                  <option key={`sys-${opt.value}`} value={`system:${opt.value}`}>
+                                    {opt.label}
+                                  </option>
+                                ))}
+                              </optgroup>
+                              {customRoles.length > 0 && (
+                                <optgroup label="Custom Access Roles">
+                                  {customRoles.map((cr) => (
+                                    <option key={`cr-${cr.id}`} value={`custom:${cr.id}`}>
+                                      {cr.name} (Custom)
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                            </select>
+                          </div>
                           {isSaving && (
                             <span className="srp-saving-badge">
                               <span className="srp-saving-dot" /> Saving...
@@ -568,6 +690,69 @@ export default function StaffRolesPage() {
                       {/* Expanded permission grid */}
                       {isExpanded && (
                         <div className="srp-user-body">
+                          {/* Quick action bar */}
+                          <div style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            padding: "12px 16px",
+                            background: "#ffffff",
+                            borderRadius: 10,
+                            border: "1px solid #e2e8f0",
+                            marginTop: 16,
+                            marginBottom: 8,
+                            flexWrap: "wrap",
+                            gap: 10
+                          }}>
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>
+                                Permissions for {row.user?.name}
+                              </div>
+                              <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>
+                                Click "Grant Full Access" to immediately unlock all modules, or toggle specific actions below.
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <button
+                                type="button"
+                                disabled={isSaving}
+                                onClick={() => grantFullAccessToUser(row)}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                  padding: "6px 14px",
+                                  borderRadius: 8,
+                                  border: "none",
+                                  background: "#2563eb",
+                                  color: "#ffffff",
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  cursor: isSaving ? "not-allowed" : "pointer"
+                                }}
+                              >
+                                ⚡ Grant Full Access
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isSaving}
+                                onClick={() => revokeAllAccessFromUser(row)}
+                                style={{
+                                  padding: "6px 12px",
+                                  borderRadius: 8,
+                                  border: "1px solid #fecaca",
+                                  background: "#fef2f2",
+                                  color: "#dc2626",
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  cursor: isSaving ? "not-allowed" : "pointer"
+                                }}
+                              >
+                                ✕ Revoke All
+                              </button>
+                            </div>
+                          </div>
+
                           {MODULE_GROUPS.map((group) => (
                             <div key={group.group}>
                               <div className="srp-group-label">
@@ -602,18 +787,32 @@ export default function StaffRolesPage() {
                                           />
                                         ))}
                                       </div>
-                                      <button
-                                        type="button"
-                                        disabled={isSaving}
-                                        onClick={() => toggleAll(row, moduleKey, false)}
-                                        style={{
-                                          fontSize: 11, fontWeight: 600, color: '#ef4444', background: 'none',
-                                          border: '1.5px solid #fecaca', borderRadius: 6, cursor: isSaving ? 'not-allowed' : 'pointer',
-                                          padding: '4px 10px', whiteSpace: 'nowrap', opacity: isSaving ? 0.6 : 1, transition: 'all 0.15s',
-                                        }}
-                                      >
-                                        ✕ Clear
-                                      </button>
+                                      <div style={{ display: "flex", gap: 6 }}>
+                                        <button
+                                          type="button"
+                                          disabled={isSaving}
+                                          onClick={() => toggleAll(row, moduleKey, true)}
+                                          style={{
+                                            fontSize: 11, fontWeight: 600, color: '#16a34a', background: '#f0fdf4',
+                                            border: '1.5px solid #bbf7d0', borderRadius: 6, cursor: isSaving ? 'not-allowed' : 'pointer',
+                                            padding: '4px 10px', whiteSpace: 'nowrap', opacity: isSaving ? 0.6 : 1, transition: 'all 0.15s',
+                                          }}
+                                        >
+                                          ✓ All
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={isSaving}
+                                          onClick={() => toggleAll(row, moduleKey, false)}
+                                          style={{
+                                            fontSize: 11, fontWeight: 600, color: '#ef4444', background: 'none',
+                                            border: '1.5px solid #fecaca', borderRadius: 6, cursor: isSaving ? 'not-allowed' : 'pointer',
+                                            padding: '4px 10px', whiteSpace: 'nowrap', opacity: isSaving ? 0.6 : 1, transition: 'all 0.15s',
+                                          }}
+                                        >
+                                          ✕ Clear
+                                        </button>
+                                      </div>
                                     </div>
                                   );
                                 })}

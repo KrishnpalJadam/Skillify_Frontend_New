@@ -81,6 +81,7 @@ export default function UsersPage() {
   const [form, setForm] = useState(makeEmptyForm);
   const [status, setStatus] = useState({ error: "", success: "", loading: true });
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [showPermissions, setShowPermissions] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [enrollmentCaptureBusy, setEnrollmentCaptureBusy] = useState(false);
   const [enrollmentCameraOpen, setEnrollmentCameraOpen] = useState(false);
@@ -835,8 +836,8 @@ export default function UsersPage() {
                       
                       <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                         <div className="hub-form-group">
-                          <label>System role (fallback) <span style={{ color: '#94a3b8', fontWeight: 400, fontSize: 11 }}>— auto-set when access role picked</span></label>
-                          <CustomDropdown className="hub-input" value={form.salonRole} onChange={(event) => applyRolePreset(event.target.value)} disabled={Boolean(form.customRoleId)} style={form.customRoleId ? { background: '#f1f5f9', cursor: 'not-allowed' } : undefined}>
+                          <label>System role (fallback) <span style={{ color: '#94a3b8', fontWeight: 400, fontSize: 11 }}>— changes preset permissions</span></label>
+                          <CustomDropdown className="hub-input" value={form.salonRole} onChange={(event) => applyRolePreset(event.target.value)}>
                             {ROLE_OPTIONS.filter((role) => (!isManager || (role.value !== "SALON_OWNER" && role.value !== "MANAGER")) || role.value === form.salonRole).map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
                           </CustomDropdown>
                         </div>
@@ -921,6 +922,96 @@ export default function UsersPage() {
                           Staff can only use self check-in after owner enables attendance and captures an enrollment selfie.
                         </div>
                       </div>
+                    </div>
+
+                    {/* Permissions Section */}
+                    <div style={{ marginBottom: 32 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: 8, marginBottom: 16 }}>
+                        <div>
+                          <h4 style={{ fontSize: 15, color: '#334155', margin: 0 }}>Module Permissions & Access</h4>
+                          <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                            {countGrantedModules(form.permissions)} modules enabled ({countGrantedActions(form.permissions)} action switches)
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const full = {};
+                              moduleCatalog.forEach((m) => { full[m.key] = ["view", "create", "edit", "approve", "pay"]; });
+                              setForm((cur) => ({ ...cur, customRoleId: "", permissions: full }));
+                            }}
+                            style={{ padding: '6px 12px', fontSize: 12, fontWeight: 600, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 6, cursor: 'pointer' }}
+                          >
+                            ⚡ Full Access
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowPermissions(!showPermissions)}
+                            style={{ padding: '6px 12px', fontSize: 12, fontWeight: 600, background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', borderRadius: 6, cursor: 'pointer' }}
+                          >
+                            {showPermissions ? "Hide Matrix ▲" : "Customize Matrix ▼"}
+                          </button>
+                        </div>
+                      </div>
+
+                      {showPermissions && (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10, background: '#f8fafc', padding: 14, borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                          {moduleCatalog.map((module) => {
+                            const currentActions = Array.isArray(form.permissions[module.key]) ? form.permissions[module.key] : [];
+                            const isGranted = currentActions.length > 0;
+                            return (
+                              <div key={module.key} style={{ background: 'white', padding: '10px 12px', borderRadius: 8, border: `1.5px solid ${isGranted ? '#bfdbfe' : '#e2e8f0'}` }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: isGranted ? '#1e40af' : '#475569', cursor: 'pointer' }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={isGranted}
+                                      onChange={(e) => setModuleAccess(module.key, e.target.checked)}
+                                    />
+                                    {module.label}
+                                  </label>
+                                  {isGranted && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setForm((cur) => ({ ...cur, customRoleId: "", permissions: { ...cur.permissions, [module.key]: ["view", "create", "edit", "approve", "pay"] } }))}
+                                      style={{ background: 'none', border: 'none', fontSize: 11, color: '#2563eb', fontWeight: 600, cursor: 'pointer', padding: 0 }}
+                                    >
+                                      All
+                                    </button>
+                                  )}
+                                </div>
+                                {isGranted && (
+                                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                    {["view", "create", "edit", "approve", "pay"].map((action) => {
+                                      const has = currentActions.includes(action);
+                                      return (
+                                        <button
+                                          key={action}
+                                          type="button"
+                                          onClick={() => togglePermission(module.key, action)}
+                                          style={{
+                                            padding: '2px 6px',
+                                            borderRadius: 4,
+                                            fontSize: 10,
+                                            fontWeight: 600,
+                                            border: `1px solid ${has ? '#93c5fd' : '#e2e8f0'}`,
+                                            background: has ? '#dbeafe' : '#f8fafc',
+                                            color: has ? '#1e40af' : '#94a3b8',
+                                            cursor: 'pointer'
+                                          }}
+                                        >
+                                          {action}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
 
                     {/* Services Section */}
