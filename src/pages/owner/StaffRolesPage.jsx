@@ -211,7 +211,7 @@ export default function StaffRolesPage() {
       await api.patch(`/owner/users/${row.id}`, patchData);
       await load();
     } catch (err) {
-      alert("Failed to update user role.");
+      alert(err.response?.data?.message || "Failed to update user role.");
       await load();
     } finally {
       setSavingId("");
@@ -227,11 +227,11 @@ export default function StaffRolesPage() {
           fullPerms[mod] = [...ACTIONS];
         });
       });
-      setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, permissions: fullPerms } : r)));
-      await api.patch(`/owner/users/${row.id}`, { permissions: fullPerms });
+      setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, customRoleId: null, customRole: null, permissions: fullPerms } : r)));
+      await api.patch(`/owner/users/${row.id}`, { customRoleId: null, permissions: fullPerms });
       await load();
     } catch (err) {
-      alert("Failed to grant full access.");
+      alert(err.response?.data?.message || "Failed to grant full access.");
       await load();
     } finally {
       setSavingId("");
@@ -247,11 +247,11 @@ export default function StaffRolesPage() {
           emptyPerms[mod] = [];
         });
       });
-      setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, permissions: emptyPerms } : r)));
-      await api.patch(`/owner/users/${row.id}`, { permissions: emptyPerms });
+      setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, customRoleId: null, customRole: null, permissions: emptyPerms } : r)));
+      await api.patch(`/owner/users/${row.id}`, { customRoleId: null, permissions: emptyPerms });
       await load();
     } catch (err) {
-      alert("Failed to revoke permissions.");
+      alert(err.response?.data?.message || "Failed to revoke permissions.");
       await load();
     } finally {
       setSavingId("");
@@ -266,11 +266,11 @@ export default function StaffRolesPage() {
       ? curActs.filter((a) => a !== action)
       : [...curActs, action];
     const nextPerms = { ...current, [moduleKey]: nextActs };
-    setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, permissions: nextPerms } : r)));
+    setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, customRoleId: null, customRole: null, permissions: nextPerms } : r)));
     try {
-      await api.patch(`/owner/users/${row.id}`, { permissions: nextPerms });
+      await api.patch(`/owner/users/${row.id}`, { customRoleId: null, permissions: nextPerms });
     } catch (err) {
-      alert("Failed to update permission.");
+      alert(err.response?.data?.message || "Failed to update permission.");
       await load();
     } finally {
       setSavingId("");
@@ -281,11 +281,11 @@ export default function StaffRolesPage() {
     setSavingId(row.id);
     const current  = row.permissions || {};
     const nextPerms = { ...current, [moduleKey]: forceAll ? [...ACTIONS] : [] };
-    setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, permissions: nextPerms } : r)));
+    setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, customRoleId: null, customRole: null, permissions: nextPerms } : r)));
     try {
-      await api.patch(`/owner/users/${row.id}`, { permissions: nextPerms });
+      await api.patch(`/owner/users/${row.id}`, { customRoleId: null, permissions: nextPerms });
     } catch (err) {
-      alert("Failed to update permissions.");
+      alert(err.response?.data?.message || "Failed to update permissions.");
       await load();
     } finally {
       setSavingId("");
@@ -506,7 +506,33 @@ export default function StaffRolesPage() {
                   </div>
 
                   <div style={{ marginBottom: 24 }}>
-                    <label className="srp-label" style={{ marginBottom: 12, display: 'block' }}>Module Permissions</label>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+                      <label className="srp-label" style={{ marginBottom: 0 }}>Module Permissions</label>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const full = {};
+                            MODULE_GROUPS.forEach((g) => g.modules.forEach((m) => { full[m] = [...ACTIONS]; }));
+                            setRoleForm((f) => ({ ...f, permissions: full }));
+                          }}
+                          style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: "#2563eb", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+                        >
+                          ⚡ Full Access
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const empty = {};
+                            MODULE_GROUPS.forEach((g) => g.modules.forEach((m) => { empty[m] = []; }));
+                            setRoleForm((f) => ({ ...f, permissions: empty }));
+                          }}
+                          style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #fecaca", background: "#fef2f2", color: "#dc2626", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+                        >
+                          ✕ Clear All
+                        </button>
+                      </div>
+                    </div>
                     {MODULE_GROUPS.map((group) => (
                       <div key={group.group}>
                         <div className="srp-group-label">
@@ -536,17 +562,30 @@ export default function StaffRolesPage() {
                                     />
                                   ))}
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={() => toggleRoleModuleAll(moduleKey)}
-                                  style={{
-                                    fontSize: 11, fontWeight: 600, color: '#ef4444', background: 'none',
-                                    border: '1.5px solid #fecaca', borderRadius: 6, cursor: 'pointer',
-                                    padding: '4px 10px', whiteSpace: 'nowrap', transition: 'all 0.15s',
-                                  }}
-                                >
-                                  ✕ Clear
-                                </button>
+                                <div style={{ display: 'flex', gap: 6 }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => setRoleForm((f) => ({ ...f, permissions: { ...f.permissions, [moduleKey]: [...ACTIONS] } }))}
+                                    style={{
+                                      fontSize: 11, fontWeight: 600, color: '#16a34a', background: '#f0fdf4',
+                                      border: '1.5px solid #bbf7d0', borderRadius: 6, cursor: 'pointer',
+                                      padding: '4px 10px', whiteSpace: 'nowrap', transition: 'all 0.15s',
+                                    }}
+                                  >
+                                    ✓ All
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setRoleForm((f) => ({ ...f, permissions: { ...f.permissions, [moduleKey]: [] } }))}
+                                    style={{
+                                      fontSize: 11, fontWeight: 600, color: '#ef4444', background: 'none',
+                                      border: '1.5px solid #fecaca', borderRadius: 6, cursor: 'pointer',
+                                      padding: '4px 10px', whiteSpace: 'nowrap', transition: 'all 0.15s',
+                                    }}
+                                  >
+                                    ✕ Clear
+                                  </button>
+                                </div>
                               </div>
                             );
                           })}

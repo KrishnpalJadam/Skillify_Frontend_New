@@ -58,6 +58,8 @@ export const MODULE_GROUPS = [
     hint: "Storefront and system configuration",
     modules: [
       { key: "customerPortalSettings", label: "Staff Portal Settings" },
+      { key: "notifications", label: "Notifications" },
+      { key: "whatsapp", label: "WhatsApp" },
       { key: "auditLogs", label: "Audit Logs" }
     ]
   },

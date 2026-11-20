@@ -472,8 +472,9 @@ export default function UsersPage() {
         ifscCode: form.ifscCode || undefined
       };
       if (isEditing) {
-        await api.patch(`/owner/users/${targetId}`, payload);
-        setStatus((current) => ({ ...current, success: "Staff profile and access updated." }));
+        const { data: updatedRow } = await api.patch(`/owner/users/${targetId}`, payload);
+        if (updatedRow) startEdit(updatedRow);
+        setStatus((current) => ({ ...current, error: "", success: "Staff profile and access updated." }));
         await load(selectedBranchId);
       } else {
         await api.post("/owner/users/create-login", {
@@ -1148,9 +1149,15 @@ export default function UsersPage() {
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, borderTop: '1px solid #e2e8f0', paddingTop: 24 }}>
-                      <button type="button" className="btn-cancel" onClick={() => startEdit(selectedRow)}>Revert Changes</button>
-                      <button type="submit" className="btn-submit">Save Staff Settings</button>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, borderTop: '1px solid #e2e8f0', paddingTop: 24, flexWrap: 'wrap' }}>
+                      <div>
+                        {status.success && <span style={{ color: '#10b981', fontSize: 13, fontWeight: 600 }}>✓ {status.success}</span>}
+                        {status.error && <span style={{ color: '#ef4444', fontSize: 13, fontWeight: 600 }}>⚠️ {status.error}</span>}
+                      </div>
+                      <div style={{ display: 'flex', gap: 12 }}>
+                        <button type="button" className="btn-cancel" onClick={() => startEdit(selectedRow)}>Revert Changes</button>
+                        <button type="submit" className="btn-submit">Save Staff Settings</button>
+                      </div>
                     </div>
                   </form>
                 </div>

@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { api, setAuthSessionHandlers, setToken, unblockSession } from "../api/client";
 
 const AuthCtx = createContext(null);
@@ -66,6 +66,30 @@ export const AuthProvider = ({ children }) => {
     onRefreshSuccess: refreshSession,
     onAuthFailure: clearSession
   });
+
+  useEffect(() => {
+    if (!auth?.accessToken) return;
+    let active = true;
+    api.get("/auth/me")
+      .then(({ data }) => {
+        if (!active || !data?.user) return;
+        setAuth((current) => {
+          if (!current) return current;
+          const nextState = {
+            ...current,
+            user: data.user,
+            membership: data.membership ?? current.membership,
+            salonId: data.membership?.salonId || current.salonId || null
+          };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
+          return nextState;
+        });
+      })
+      .catch(() => {
+        // Keep current session if /auth/me is unavailable on older backend builds
+      });
+    return () => { active = false; };
+  }, [auth?.accessToken]);
 
   const value = { auth, login, logout, clearSession };
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
