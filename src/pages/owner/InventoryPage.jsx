@@ -4,6 +4,7 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { useSalonSettings } from "../../context/SalonSettingsContext";
 import { useBranch } from "../../context/BranchContext";
+import { useAuth } from "../../context/AuthContext";
 import { formatApiError } from "../../utils/apiError";
 import PageLoader from "../../components/PageLoader";
 import VendorManagement from "./VendorManagement";
@@ -32,6 +33,7 @@ export default function InventoryPage() {
   const location = useLocation();
   const { formatMoney } = useSalonSettings();
   const { selectedBranchId } = useBranch();
+  const { auth } = useAuth();
 
   const [activeTab, setActiveTab] = useState(() => getInventoryTabFromPath(location.pathname));
   const [categories, setCategories] = useState([]);
@@ -507,7 +509,7 @@ export default function InventoryPage() {
   const handlePurchaseOrderSubmit = async (e) => {
     e.preventDefault();
     try {
-      await api.post("/owner/purchases/orders", {
+      const { data: createdOrder } = await api.post("/owner/purchases/orders", {
         branchId: purchaseOrderForm.branchId,
         vendorId: purchaseOrderForm.vendorId,
         notes: purchaseOrderForm.notes,
@@ -517,7 +519,68 @@ export default function InventoryPage() {
           unitCost: Number(item.unitCost)
         }))
       });
-      setStatus({ success: "Purchase order created successfully!", error: "" });
+
+      const vendor = vendors.find((v) => v.id === purchaseOrderForm.vendorId);
+      const vendorEmail = String(vendor?.email || "").trim();
+      let emailNotice = " (No email saved on this vendor.)";
+
+      if (vendorEmail) {
+        try {
+          const salonName = auth?.membership?.salonName || "Salon";
+          const placedBy = auth?.user?.name || "";
+          const branch = branches.find((b) => b.id === (purchaseOrderForm.branchId || createdOrder?.branchId));
+          const orderNumber = createdOrder?.orderNumber || "PO";
+          const orderDate = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+
+          let grandTotal = 0;
+          const itemLines = purchaseOrderForm.items.map((item, idx) => {
+            const prod = products.find((p) => p.id === item.productId);
+            const qty = Number(item.quantityOrdered || 0);
+            const unitCost = Number(item.unitCost || 0);
+            const lineTotal = qty * unitCost;
+            grandTotal += lineTotal;
+            const unit = prod?.unit ? ` ${prod.unit}` : "";
+            const sku = prod?.sku ? ` (SKU: ${prod.sku})` : "";
+            return `${idx + 1}. ${prod?.name || "Product"}${sku} — Qty: ${qty}${unit} × ${formatMoney(unitCost)} = ${formatMoney(lineTotal)}`;
+          });
+
+          const message = [
+            `Hello ${vendor?.firmName || vendor?.name || "Vendor"},`,
+            ``,
+            `A new Purchase Order has been placed by ${salonName}${branch?.name ? ` (${branch.name})` : ""}.`,
+            ``,
+            `Order Number: ${orderNumber}`,
+            `Order Date: ${orderDate}`,
+            branch?.name ? `Delivery Branch: ${branch.name}` : "",
+            branch?.address ? `Address: ${branch.address}` : "",
+            branch?.phone ? `Contact Phone: ${branch.phone}` : "",
+            placedBy ? `Placed By: ${placedBy}` : "",
+            purchaseOrderForm.notes ? `\nRequirement / Notes:\n${purchaseOrderForm.notes}` : "",
+            ``,
+            `Order Requirements:`,
+            ...itemLines,
+            ``,
+            `Estimated Total: ${formatMoney(grandTotal)}`,
+            ``,
+            `Please confirm stock availability and expected delivery schedule.`
+          ]
+            .filter((line) => line !== "")
+            .join("\n");
+
+          await api.post("/owner/whatsapp/send-manual", {
+            channel: "EMAIL",
+            email: vendorEmail,
+            templateType: `New Purchase Order ${orderNumber} from ${salonName}`,
+            message
+          });
+          emailNotice = ` Requirement email sent to ${vendorEmail}.`;
+        } catch (emailErr) {
+          console.error("[PO Vendor Email] Failed:", emailErr);
+          emailNotice = ` (Could not send email to ${vendorEmail}.)`;
+        }
+      }
+
+      setStatus({ success: `Purchase order created successfully!${emailNotice}`, error: "" });
       closePurchaseOrderModal();
       loadAll();
     } catch (error) {
